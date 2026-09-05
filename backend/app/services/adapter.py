@@ -1,10 +1,11 @@
 import httpx
+from typing import Any
 from ..models import Target
 from ..config import settings
 from .secrets import reveal
 
 
-def extract_text_from_any_response(data: any, custom_field: str | None = None) -> str:
+def extract_text_from_any_response(data: Any, custom_field: str | None = None) -> str:
     """
     Extracts text from Hugging Face API, Serverless Router, or target response structures.
     """
@@ -63,9 +64,11 @@ async def call_target(target: Target, message: str, session_id: str) -> str:
     if target.auth_config_encrypted:
         auth_val = reveal(target.auth_config_encrypted, settings.encryption_key) or ""
 
-    preset = (target.request_format.get("preset") or "").lower()
+    request_format = target.request_format or {}
+    response_format = target.response_format or {}
+    preset = (request_format.get("preset") or "").lower()
     endpoint = (target.api_endpoint or "").lower()
-    model_name = target.model_name or "mistralai/Mistral-7B-Instruct-v0.3"
+    model_name = target.model_name or settings.hf_model_id
 
     # Hugging Face Model or Router Target
     if preset == "huggingface" or "huggingface.co" in endpoint:
@@ -76,7 +79,7 @@ async def call_target(target: Target, message: str, session_id: str) -> str:
             token=auth_val,
             prompt=message,
             system_instruction=target.declared_policy,
-            custom_text_field=target.response_format.get("text_field") if target.response_format else None
+            custom_text_field=response_format.get("text_field"),
         )
 
     # Standard / Custom Target Bot API Endpoint
@@ -91,7 +94,7 @@ async def call_target(target: Target, message: str, session_id: str) -> str:
             "messages": [{"role": "user", "content": message}]
         }
     else:
-        msg_field = target.request_format.get("message_field", "message")
+        msg_field = request_format.get("message_field", "message")
         payload = {
             "model": model_name,
             "messages": [{"role": "user", "content": message}],
@@ -119,7 +122,7 @@ async def call_target(target: Target, message: str, session_id: str) -> str:
                     return f"[Target API Error {response.status_code}]: {err_detail}"
 
             data = response.json()
-            custom_text_field = target.response_format.get("text_field") if target.response_format else None
+            custom_text_field = response_format.get("text_field")
             return extract_text_from_any_response(data, custom_text_field)
     except httpx.ConnectError:
         return f"[Target Connection Error]: Could not connect to {target.api_endpoint}. Ensure the server is online."

@@ -1,0 +1,21 @@
+# Secrets: the compose file supplies real values via `environment:`.
+# Without this, `COPY . .` would bake .env into the image.
+.env
+
+# Host-built artifacts. node_modules in particular is platform-specific:
+# copying a host install into the image breaks native binaries.
+**/node_modules
+frontend/dist
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+
+# Local state and VCS
+.git
+.gitignore
+*.db
+*.sqlite*
+.venv
+.reference
+reports
+tmp

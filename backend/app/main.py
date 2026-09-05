@@ -1,5 +1,8 @@
+import logging
+from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from .database import Base, engine, get_db
 from .config import settings
@@ -15,28 +18,45 @@ from .api.proxy import router as proxy_router
 from .api.reports import router as reports_router
 from .api.alerts import router as alerts_router
 
-# Ensure tables exist
-Base.metadata.create_all(engine)
+logger = logging.getLogger("eaglei.main")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Tables are created on startup rather than at import time, so importing
+    # this module (tests, tooling) does not require a reachable database.
+    Base.metadata.create_all(engine)
+    yield
+
 
 app = FastAPI(
     title="eagleI — AI Security Testing & Inspection Platform",
     description="3-Panel Architecture: Injection -> Chatbox -> Analyzer",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
-# CORS Configuration
+
+# CORS Configuration. Origins come from EAGLEI_CORS_ORIGINS (comma-separated).
+# Set it to "*" to allow any origin; credentials are then disabled, because
+# browsers reject a wildcard origin combined with Allow-Credentials.
+_configured = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+_allow_any = "*" in _configured
+
+_default_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+_origins = ["*"] if _allow_any else sorted(set(_configured) | set(_default_origins))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-    ],
-    allow_origin_regex=r"^https?://.*$",
-    allow_credentials=True,
+    allow_origins=_origins,
+    allow_credentials=not _allow_any,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -45,9 +65,18 @@ app.add_middleware(
 
 @app.get("/health")
 def health(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+        database = "connected"
+        status = "ok"
+    except Exception as exc:
+        logger.error(f"Health check database probe failed: {exc}")
+        database = "unavailable"
+        status = "degraded"
+
     return {
-        "status": "ok",
-        "database": "connected",
+        "status": status,
+        "database": database,
         "judge_provider": settings.judge_provider,
         "mode": "3-panel-unified"
     }

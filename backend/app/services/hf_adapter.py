@@ -1,15 +1,12 @@
 import logging
-import os
 import httpx
-from typing import Any
 from .adapter import extract_text_from_any_response
-from .secrets import reveal
 from ..config import settings
 
 logger = logging.getLogger("eaglei.hf_adapter")
 
-HF_DEFAULT_MODEL = os.getenv("HF_MODEL_ID", "mistralai/Mistral-7B-Instruct-v0.3")
-HF_ROUTER_URL = "https://router.huggingface.co/hf-inference/v1/chat/completions"
+HF_DEFAULT_MODEL = settings.hf_model_id
+HF_ROUTER_URL = settings.hf_router_url
 HF_INFERENCE_BASE = "https://api-inference.huggingface.co/models"
 
 
@@ -26,7 +23,7 @@ async def call_huggingface_target(
     Sends a test prompt to Hugging Face API and returns the normalized text response.
     """
     model = model_name or HF_DEFAULT_MODEL
-    auth_token = token or os.getenv("HF_TOKEN") or ""
+    auth_token = token or settings.hf_token or ""
     if auth_token.startswith("Bearer "):
         auth_token = auth_token.replace("Bearer ", "").strip()
 

@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     cors_origins: str = Field(default="http://localhost:5173",validation_alias=AliasChoices("EAGLEI_CORS_ORIGINS","CORS_ORIGINS"))
     proxy_api_key: str = Field(default="",validation_alias=AliasChoices("EAGLEI_PROXY_API_KEY","PROXY_API_KEY"))
     demo_target_url: str = "http://localhost:8001/v1/chat/completions"
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Hugging Face credentials. These are read from .env via pydantic-settings,
+    # which does NOT export them to os.environ -- adapters must read them from here.
+    hf_token: str = Field(default="",validation_alias=AliasChoices("HF_TOKEN","HUGGINGFACE_TOKEN"))
+    hf_model_id: str = "mistralai/Mistral-7B-Instruct-v0.3"
+    hf_router_url: str = "https://router.huggingface.co/hf-inference/v1/chat/completions"
+    canary_secret: str = "GENESIS-7731-INTERNAL"
+    mock_llm: bool = False
+
+    # env_file is resolved against ROOT so the app picks up .env regardless of cwd.
+    model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore")
 
 settings = Settings()
