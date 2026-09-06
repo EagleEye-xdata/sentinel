@@ -1,15 +1,17 @@
-# 🦅 eagleI — Unified AI Security Architecture v2
+# Sentinel — AI Security Testing & Inspection
 
-**eagleI** is an authorized cybersecurity platform that tests, analyzes, and secures AI chatbots and Large Language Models against **Prompt Injection**, **Jailbreaks**, and **System Prompt / Canary Leakage** — as a live gateway or as an offline batch harness.
+[Repository](https://github.com/EagleEye-xdata/sentinel)
+
+**Sentinel** is an authorized cybersecurity platform that tests, analyzes, and secures AI chatbots and Large Language Models against **Prompt Injection**, **Jailbreaks**, and **System Prompt / Canary Leakage** — as a live gateway or as an offline batch harness.
 
 It connects to the **Hugging Face API** and custom LLM endpoints, and ships with an **air-gapped micro-model sandbox** so the entire demo runs with no network, no credentials, and no inference bill.
 
-**Runs 100% offline. No API keys, no Docker, no model download required.**
+**The deterministic demo runs offline after dependencies are installed. No API keys, Docker, or model download required.**
 
 ```bash
 python -m uvicorn backend.app.main:app --port 8000    # backend
 cd frontend && npm install && npm run dev             # dashboard
-python -m pytest -q                                   # 113 tests
+python -m pytest -q
 ```
 
 ---
@@ -21,7 +23,7 @@ python -m pytest -q                                   # 113 tests
 | **1 · Corpus & Memory** | Mutates base seeds across **17 categories**; maintains 1,800-second session history. | Validated injection patterns & bounded input windows |
 | **2 · Baseline / Proxy** | Live traffic routing (ALLOW/BLOCK/REVIEW) or batch-mode dispatch. | Versioned target behavior telemetry |
 | **3 · Detection Engine** | Multi-pass decoding, 19-signature rule execution, vector-free lexical similarity. | Deterministic request decision & response verdict |
-| **4 · Cryptographic Audit** | HMAC-SHA256 authenticated chains and atomic key publication. | Tamper-proof, verifiable security reports |
+| **4 · Cryptographic Audit** | HMAC-SHA256 authenticated chains and atomic key publication. | Tamper-evident, verifiable security reports |
 
 Live at `GET /architecture/planes`. Full spec-to-code mapping: [`docs/unified-architecture-v2-ASBUILT.md`](docs/unified-architecture-v2-ASBUILT.md).
 
@@ -135,20 +137,33 @@ GET  /audit/keys                      open segment + published segments
 
 ---
 
-## 🚀 Quick Start Guide (Run Locally in 2 Steps)
+## 🚀 Quick Start Guide
 
 ### Prerequisites:
 - Python 3.10+
 - Node.js 18+
 
-### Step 1: Start Backend API (FastAPI)
+### Step 1: Clone and prepare the project
+```powershell
+git clone https://github.com/EagleEye-xdata/sentinel.git
+cd sentinel
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r backend/requirements.txt
+Copy-Item .env.example .env
+$env:JUDGE_PROVIDER = "none"
+$env:MOCK_LLM = "1"
+python -m scripts.seed_corpus
+```
+
+### Step 2: Start Backend API (FastAPI)
 ```powershell
 # From project root directory:
 python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 *Backend API will be live at: `http://127.0.0.1:8000` (Docs: `http://127.0.0.1:8000/docs`)*
 
-### Step 2: Start Frontend UI (Vite + React)
+### Step 3: Start Frontend UI (Vite + React) in another terminal
 ```powershell
 cd frontend
 npm install
@@ -160,13 +175,13 @@ npm run dev
 
 ## 🤖 Hugging Face Integration Setup
 
-eagleI uses the official **Hugging Face Serverless Inference Router** for testing models:
+Sentinel uses the official **Hugging Face Serverless Inference Router** for testing models:
 
 - **Router Endpoint:** `https://router.huggingface.co/hf-inference/v1/chat/completions`
 - **Default Model:** `mistralai/Mistral-7B-Instruct-v0.3` (or `meta-llama/Meta-Llama-3.1-8B-Instruct`)
 - **API Key / Token:**
   1. Get your free token from [Hugging Face Settings > Tokens](https://huggingface.co/settings/tokens) (Token Type: **Inference**).
-  2. Enter the token in the **Targets** tab in eagleI UI (or save in `.env` as `HF_TOKEN=hf_...`).
+  2. Enter the token in the **Targets** tab in Sentinel UI (or save in `.env` as `HF_TOKEN=hf_...`).
 
 ### 🧪 Optional Local Test Target (Offline Demo):
 If you want to test prompt injections offline without an internet connection or API credits, run the built-in controlled target fixture:
@@ -190,7 +205,7 @@ python target/huggingface_target.py
 ## 📁 Project Architecture & Directory Tree
 
 ```
-eagleI/
+sentinel/
 ├── backend/
 │   ├── app/
 │   │   ├── api/
@@ -226,9 +241,9 @@ eagleI/
 │   └── huggingface_target.py        # Controlled Hugging Face target bot (WEAK vs HARDENED)
 │
 ├── corpus/
-│   └── seed/                        # Curated seed attack patterns across 14 categories
+│   └── seed/                        # Curated seed attack patterns across 17 categories
 │
-├── tests/                           # Pytest Test Suite (113/113 passing)
+├── tests/                           # Pytest Test Suite
 │   ├── test_fusion_zero_api.py      # Zero-API fusion arithmetic & gate bands
 │   ├── test_audit_chain.py          # HMAC chain, tamper detection, key publication
 │   ├── test_sandbox_and_fuzzer.py   # Air-gapped sandbox, 19 signatures, fuzzing
@@ -252,7 +267,7 @@ eagleI/
 All backend and frontend components are verified with automated test suites:
 
 ```powershell
-# Run backend pytest suite (113 tests):
+# Run backend pytest suite:
 python -m pytest -q
 
 # Build frontend production bundle:
@@ -264,4 +279,4 @@ npm run build
 
 ## 🔒 Security & Compliance Notice
 
-> **⚠️ Authorization Required:** eagleI is strictly intended for authorized security audits, red-teaming, and defensive hardening of AI systems. Only test endpoints and models that you own or have explicit permission to evaluate.
+> **⚠️ Authorization Required:** Sentinel is strictly intended for authorized security audits, red-teaming, and defensive hardening of AI systems. Only test endpoints and models that you own or have explicit permission to evaluate.
