@@ -21,8 +21,10 @@ def list_attacks(
         query = query.filter_by(category=category)
     if severity:
         query = query.filter(AttackPattern.source_severity == severity.upper())
-    if origin:
+    if origin and origin.lower() != "all":
         query = query.filter_by(origin=origin)
+    elif not origin:
+        query = query.filter(AttackPattern.origin.in_(["seed", "github"]))
     if q:
         query = query.filter((AttackPattern.title.ilike(f"%{q}%")) | (AttackPattern.cleaned_prompt.ilike(f"%{q}%")))
     return [

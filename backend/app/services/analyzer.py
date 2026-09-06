@@ -14,14 +14,20 @@ def severity_from_score(score: float) -> str:
 def generate_finding_and_remediation(
     request_verdict: dict[str, Any],
     response_verdict: dict[str, Any] | None,
-    attack_info: dict[str, Any] | None = None
+    attack_info: dict[str, Any] | None = None,
+    reached_target: bool | None = None,
 ) -> dict[str, Any]:
     req_risk = request_verdict.get("risk_score", 0)
     req_action = request_verdict.get("action", "ALLOW")
     req_type = request_verdict.get("attack_type") or "prompt_injection"
     matched_rules = request_verdict.get("evidence", {}).get("matched_rules", [])
 
-    if req_action == "BLOCK":
+    # Only claim the gateway blocked when the response was genuinely withheld.
+    # Batch runs are permissive by default: the gate reports its verdict while
+    # the target is still measured, and calling that "BLOCKED" would hide what
+    # the target actually did with the payload.
+    withheld = (reached_target is False) if reached_target is not None else (response_verdict is None)
+    if req_action == "BLOCK" and withheld:
         return {
             "verdict": "BLOCKED",
             "verdict_label": "BLOCKED AT GATEWAY",

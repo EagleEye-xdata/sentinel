@@ -3,7 +3,7 @@ import httpx
 from .adapter import extract_text_from_any_response
 from ..config import settings
 
-logger = logging.getLogger("eaglei.hf_adapter")
+logger = logging.getLogger("sentinel.hf_adapter")
 
 HF_DEFAULT_MODEL = settings.hf_model_id
 HF_ROUTER_URL = settings.hf_router_url

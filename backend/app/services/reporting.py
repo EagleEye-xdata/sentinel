@@ -1,6 +1,11 @@
 from collections import Counter, defaultdict
 from sqlalchemy.orm import Session
 from ..models import AttackPattern, Report, Target, TestExecution, TestRun
+from . import fusion
+from .micro_model import backend_status
+from .mutator import MUTATION_ORDER
+from .response_inspector import SCANNERS
+from .signatures import SIGNATURE_COUNT
 
 OWASP_MAPPINGS = {
     "instruction_override": "LLM01: Prompt Injection",
@@ -30,9 +35,12 @@ def build_report(db: Session, run_id: int) -> dict:
     severities = Counter()
     findings = []
     
+    attack_ids = {e.attack_pattern_id for e in rows if e.attack_pattern_id}
+    attacks_map = {a.id: a for a in db.query(AttackPattern).filter(AttackPattern.id.in_(attack_ids)).all()} if attack_ids else {}
+
     for e in rows:
-        a = db.get(AttackPattern, e.attack_pattern_id) if e.attack_pattern_id else None
-        cat = a.category if a else "live"
+        a = attacks_map.get(e.attack_pattern_id)
+        cat = a.category if a else (e.request_evidence.get("attack_category") or e.request_evidence.get("attack_type") or "live")
         owasp = get_owasp_tag(cat)
         
         categories[cat]["executed"] += 1
@@ -47,8 +55,8 @@ def build_report(db: Session, run_id: int) -> dict:
             "attack_id": e.attack_pattern_id,
             "category": cat,
             "owasp_tag": owasp,
-            "title": a.title if a else "Live message",
-            "mutation": a.mutation if a else None,
+            "title": a.title if a else (f"Single Test ({cat})" if cat != "live" else "Single Prompt Injection Test"),
+            "mutation": (a.mutation if a else None) or e.request_evidence.get("mutation"),
             "payload_used": e.request_text,
             "request_verdict": e.request_action,
             "request_evidence": e.request_evidence,
@@ -60,7 +68,7 @@ def build_report(db: Session, run_id: int) -> dict:
             "source_severity": e.source_severity,
             "derived_severity": e.derived_severity,
             "confidence": e.confidence,
-            "remediation": a.remediation if a else "Harden instruction boundaries and validate model output."
+            "remediation": (a.remediation if a else None) or e.request_evidence.get("remediation") or "Harden instruction boundaries and validate model output."
         })
     findings.sort(key=lambda x: (x["outcome"] != "SUCCESSFUL", -x["confidence"]))
     risk = round(sum(max(e.request_risk_score, e.response_risk_score) for e in rows) / len(rows), 2) if rows else 0
@@ -81,7 +89,25 @@ def build_report(db: Session, run_id: int) -> dict:
         "severity_breakdown": dict(severities),
         "by_category": [{"category": k, **v} for k, v in categories.items()],
         "by_owasp": [{"owasp": k, **v} for k, v in owasp_breakdown.items()],
-        "findings": findings
+        "findings": findings,
+        "architecture": {
+            "name": "Unified AI Security Architecture v2",
+            "planes": ["Corpus & Memory", "Baseline / Proxy", "Detection Engine", "Cryptographic Audit"],
+            "detection_engine": "zero-api-deterministic",
+            "fusion_formula": "(0.50 x R) + (0.35 x S) + (0.15 x D)",
+            "fusion_weights": dict(fusion.WEIGHTS),
+            "signatures": SIGNATURE_COUNT,
+            "transformations": len(MUTATION_ORDER),
+            "dlp_scanners": SCANNERS,
+            "target_backend": backend_status() if str(target.api_endpoint).startswith("internal://") else
+                              {"backend": "remote_http", "air_gapped": False, "endpoint": target.api_endpoint},
+        },
+        "limitations": [
+            "Content the target fetches itself (server-side RAG or browsing) is outside proxy scope unless it surfaces in the response body.",
+            "Internal tool calls that never appear in the response cannot be observed by a response-side gate.",
+            "Payloads split across more turns than the session window retains are not reassembled.",
+            "Runs against the deterministic sandbox oracle demonstrate pipeline correctness, not detection generality against production models.",
+        ],
     }
 
 def markdown_report(report: dict) -> str:

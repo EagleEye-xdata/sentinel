@@ -14,7 +14,7 @@ def protect(value:str|None,secret:str)->str|None:
 
 def reveal(value:str|None,secret:str)->str|None:
     if not value or not value.startswith(PREFIX):return value
-    if not secret:raise RuntimeError("encrypted target credential requires EAGLEI_ENCRYPTION_KEY")
+    if not secret:raise RuntimeError("encrypted target credential requires SENTINEL_ENCRYPTION_KEY (or EAGLEI_ENCRYPTION_KEY)")
     return _fernet(secret).decrypt(value[len(PREFIX):].encode()).decode()
 
 def mask(value:str|None)->str|None:

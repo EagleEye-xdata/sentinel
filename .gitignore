@@ -9,4 +9,5 @@ frontend/dist/
 reports/
 .venv/
 .reference/
-tmp/
+data/audit_keys/*.key.json
+!data/audit_keys/.gitkeep

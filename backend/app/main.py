@@ -17,8 +17,15 @@ from .api.tests import router as tests_router
 from .api.proxy import router as proxy_router
 from .api.reports import router as reports_router
 from .api.alerts import router as alerts_router
+from .api.audit import router as audit_router
+from .api.architecture import router as architecture_router
+from .services import fusion
+from .services.audit import audit_chain
+from .services.micro_model import backend_status
+from .services.mutator import MUTATION_ORDER
+from .services.signatures import SIGNATURE_COUNT
 
-logger = logging.getLogger("eaglei.main")
+logger = logging.getLogger("sentinel.main")
 
 
 @asynccontextmanager
@@ -30,14 +37,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="eagleI — AI Security Testing & Inspection Platform",
+    title="Sentinel — AI Security Testing & Inspection Platform",
     description="3-Panel Architecture: Injection -> Chatbox -> Analyzer",
     version="1.0.0",
     lifespan=lifespan,
 )
 
 
-# CORS Configuration. Origins come from EAGLEI_CORS_ORIGINS (comma-separated).
+# CORS Configuration. Origins come from SENTINEL_CORS_ORIGINS or EAGLEI_CORS_ORIGINS (comma-separated).
 # Set it to "*" to allow any origin; credentials are then disabled, because
 # browsers reject a wildcard origin combined with Allow-Credentials.
 _configured = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
@@ -78,7 +85,18 @@ def health(db: Session = Depends(get_db)):
         "status": status,
         "database": database,
         "judge_provider": settings.judge_provider,
-        "mode": "3-panel-unified"
+        "mode": "3-panel-unified",
+        "architecture": "unified-ai-security-architecture-v2",
+        "planes": ["Corpus & Memory", "Baseline / Proxy", "Detection Engine", "Cryptographic Audit"],
+        "detection": {
+            "engine": "zero-api-deterministic",
+            "signatures": SIGNATURE_COUNT,
+            "transformations": len(MUTATION_ORDER),
+            "fusion_weights": fusion.WEIGHTS,
+            "similarity_threshold": fusion.SIMILARITY_THRESHOLD,
+        },
+        "sandbox": backend_status(),
+        "audit": {"algorithm": "HMAC-SHA256", "open_segment": audit_chain.key_id},
     }
 
 
@@ -90,5 +108,7 @@ app.include_router(tests_router)
 app.include_router(proxy_router)
 app.include_router(reports_router)
 app.include_router(alerts_router)
+app.include_router(audit_router)
+app.include_router(architecture_router)
 
 __all__ = ["app", "inspect_session", "session_windows"]

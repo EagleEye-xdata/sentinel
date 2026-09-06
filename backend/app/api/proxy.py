@@ -8,7 +8,9 @@ from ..services.request_inspector import get_corpus, inspect_session
 from ..services.response_inspector import inspect_response
 from ..services.analyzer import severity_from_score
 from ..services.judge import judge
+from ..services.audit import record
 from ..config import settings
+from hashlib import sha256
 
 router = APIRouter(tags=["proxy"])
 
@@ -17,16 +19,25 @@ router = APIRouter(tags=["proxy"])
 async def proxy_chat(
     body: ProxyRequest,
     db: Session = Depends(get_db),
+    x_sentinel_proxy_key: str | None = Header(default=None),
     x_eaglei_proxy_key: str | None = Header(default=None)
 ):
-    if settings.proxy_api_key and x_eaglei_proxy_key != settings.proxy_api_key:
-        raise HTTPException(401, "invalid or missing X-eagleI-Proxy-Key")
+    key = x_sentinel_proxy_key or x_eaglei_proxy_key
+    if settings.proxy_api_key and key != settings.proxy_api_key:
+        raise HTTPException(401, "invalid or missing X-Sentinel-Proxy-Key")
 
     target = db.get(Target, body.target_id)
     if not target:
         raise HTTPException(404, "target not found")
 
     req = inspect_session(body.message, body.session_id, get_corpus(db))
+    prompt_sha = sha256(body.message.encode()).hexdigest()
+    record(db, "proxy.request_gate", {
+        "target_id": target.id, "session_id": body.session_id, "prompt_sha": prompt_sha,
+        "action": req["action"], "risk": req["risk_score"], "confidence": req["confidence"],
+        "signals": req["evidence"].get("signals"),
+    })
+
     if req["action"] == "BLOCK":
         db.add(Alert(
             severity=severity_from_score(req["risk_score"]),
@@ -46,6 +57,13 @@ async def proxy_chat(
         await judge(body.message, response, "live inspection", "safe assistance", target.declared_policy)
     )
     final = None if resp["action"] == "BLOCK" else resp["redacted_response"] if resp["action"] == "REDACT" else response
+    record(db, "proxy.response_gate", {
+        "target_id": target.id, "session_id": body.session_id, "prompt_sha": prompt_sha,
+        "action": resp["action"], "risk": resp["risk_score"], "outcome": resp["outcome"],
+        "leakage_type": resp.get("leakage_type"),
+        "redacted_spans": len(resp["evidence"].get("matched_spans", [])),
+    })
+
     if resp["action"] in {"BLOCK", "REDACT"}:
         db.add(Alert(
             severity=severity_from_score(resp["risk_score"]),

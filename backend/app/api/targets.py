@@ -6,6 +6,7 @@ from ..database import get_db
 from ..models import Target, TestRun, TestExecution, Report
 from ..schemas import TargetCreate
 from ..services.secrets import protect
+from ..services.micro_model import backend_status, catalog as sandbox_catalog, is_internal
 from ..config import settings
 
 router = APIRouter(tags=["targets"])
@@ -14,6 +15,10 @@ router = APIRouter(tags=["targets"])
 def sanitize_endpoint_url(url: str) -> str:
     """Normalizes and fixes malformed URLs (e.g. https://https:// or missing scheme)."""
     clean = (url or "").strip()
+    # internal:// addresses the air-gapped micro-model sandbox on this host and
+    # is deliberately not an HTTP URL -- leave it exactly as written.
+    if clean.lower().startswith("internal://"):
+        return clean
     # Strip duplicated schemes like https://https:// or http://https://
     while re.match(r"^(https?:\/\/)+(https?:\/\/)", clean, re.IGNORECASE):
         clean = re.sub(r"^(https?:\/\/)+", "", clean, flags=re.IGNORECASE)
@@ -60,6 +65,12 @@ def list_targets(db: Session = Depends(get_db)):
     ]
 
 
+@router.get("/sandbox")
+def sandbox_info():
+    """Air-gapped micro-model sandbox: which local models exist and which backend serves them."""
+    return {"models": sandbox_catalog(), **backend_status()}
+
+
 @router.get("/targets/{target_id}/ping")
 async def ping_target(target_id: int, db: Session = Depends(get_db)):
     target = db.get(Target, target_id)
@@ -67,6 +78,9 @@ async def ping_target(target_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Target not found")
 
     endpoint = target.api_endpoint
+    if is_internal(endpoint):
+        return {"reachable": True, "endpoint": endpoint, "sandbox": backend_status()}
+
     health_url = endpoint
     if "/chat" in endpoint:
         health_url = endpoint.replace("/chat", "/health")
@@ -74,7 +88,7 @@ async def ping_target(target_id: int, db: Session = Depends(get_db)):
         health_url = endpoint.replace("/v1/chat/completions", "/health")
 
     try:
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        async with httpx.AsyncClient(timeout=1.5) as client:
             resp = await client.get(health_url)
             return {
                 "reachable": resp.status_code in [200, 204, 404, 405],

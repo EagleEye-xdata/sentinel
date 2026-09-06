@@ -100,6 +100,24 @@ class Report(Base):
     summary: Mapped[dict[str, Any]] = mapped_column(JSON)
     generated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+class AuditEvent(Base):
+    """PLANE 4 — one link in the HMAC-SHA256 authenticated chain.
+
+    `entry_hash` is HMAC(key[key_id], seq|ts|event_type|prev_hash|canonical(payload)).
+    Rows are append-only: nothing in the application ever updates or deletes one.
+    """
+    __tablename__ = "audit_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    seq: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    ts: Mapped[str] = mapped_column(String(40))
+    event_type: Mapped[str] = mapped_column(String(60), index=True)
+    key_id: Mapped[str] = mapped_column(String(40), index=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    prev_hash: Mapped[str] = mapped_column(String(64))
+    entry_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class SourceRepository(Base):
     __tablename__ = "source_repositories"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

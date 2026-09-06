@@ -1,4 +1,6 @@
+import asyncio
 import uuid
+from collections import defaultdict
 from datetime import datetime
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -11,6 +13,7 @@ from ..services.response_inspector import inspect_response
 from ..services.analyzer import severity_from_score
 from ..services.judge import judge
 from ..services.mutator import mutate
+from ..services.audit import audit_chain, record
 
 router = APIRouter(tags=["tests"])
 
@@ -22,15 +25,19 @@ async def execute_run(run_id: int):
         target = db.get(Target, run.target_id)
         run.status, run.started_at = "running", datetime.utcnow()
         db.commit()
+        record(db, "run.started", {"run_id": run.id, "target_id": target.id, "target_name": target.name,
+                                   "config": run.config})
 
-        q = db.query(AttackPattern).filter_by(origin="seed")
+        q = db.query(AttackPattern).filter(AttackPattern.origin.in_(["seed", "github"]))
         cats = run.config.get("categories") or []
         if cats:
             q = q.filter(AttackPattern.category.in_(cats))
         selected = q.limit(run.config["count"]).all()
         work = []
 
+        family_map = defaultdict(set)
         for a in selected:
+            family_map[str(a.id)].add(str(a.id))
             work.append((a, a.raw_prompt, a.mutation))
             for m in run.config.get("mutations", [])[:run.config.get("variants_per_attack", 0)]:
                 value = mutate(a.raw_prompt, m)
@@ -45,15 +52,20 @@ async def execute_run(run_id: int):
                     parent_pattern_id=a.id, mutation=m, turns=value if isinstance(value, list) else None,
                     provenance={"parent": a.id}
                 )
-                db.add(ma); db.flush()
+                db.add(ma)
+                family_map[str(a.id)].add(mid)
+                family_map[mid] = family_map[str(a.id)]
                 work.append((ma, prompt, m))
 
-        run.total = len(work); db.commit()
+        run.total = len(work)
+        db.commit()
+
+        corpus = get_corpus(db)
 
         for seq, (a, prompt, mutation_name) in enumerate(work, 1):
-            root_id = a.parent_pattern_id or a.id
-            family = {str(row.id) for row in db.query(AttackPattern).filter((AttackPattern.id == root_id) | (AttackPattern.parent_pattern_id == root_id)).all()}
-            req = inspect_request(prompt, get_corpus(db), exclude_ids=family)
+            root_id = str(a.parent_pattern_id or a.id)
+            family = family_map.get(root_id, {root_id, str(a.id)})
+            req = inspect_request(prompt, corpus, exclude_ids=family)
             reached = not (run.config.get("enforce_request_block") and req["action"] == "BLOCK")
             started, response = datetime.utcnow(), None
 
@@ -87,10 +99,37 @@ async def execute_run(run_id: int):
                 derived_severity=severity_from_score(maxrisk), confidence=max(req["confidence"], resp["confidence"]),
                 latency_ms=(datetime.utcnow() - started).total_seconds() * 1000
             )
-            db.add(ex); db.commit()
+            db.add(ex)
+            # Commit periodically to keep database responsive and avoid blocking
+            if seq % 10 == 0 or seq == len(work):
+                db.commit()
+
+            record(db, "execution.decision", {
+                "run_id": run.id, "seq": seq, "attack_id": a.id, "category": a.category,
+                "mutation": mutation_name, "request_action": req["action"], "request_risk": req["risk_score"],
+                "reached_target": reached, "response_action": resp["action"],
+                "response_risk": resp["risk_score"], "outcome": outcome,
+                "derived_severity": ex.derived_severity,
+            })
+            # Yield to event loop so incoming HTTP requests (health, alerts, etc.) are never blocked
+            await asyncio.sleep(0.001)
 
         run.status, run.finished_at = "completed", datetime.utcnow()
         db.commit()
+        record(db, "run.completed", {
+            "run_id": run.id, "target_id": target.id, "total": run.total, "executed": run.executed,
+            "successful": run.successful, "resisted": run.resisted, "inconclusive": run.inconclusive,
+            "skipped": run.skipped, "errors": run.errors,
+        })
+        # Seal the run: publish this segment's key atomically and rotate. From
+        # here the run's audit trail is independently verifiable and frozen.
+        sealed = audit_chain.publish_segment(db)
+        if sealed.get("published"):
+            record(db, "audit.key_published", {
+                "run_id": run.id, "sealed_key_id": sealed["key_id"],
+                "head_seq": sealed["head_seq"], "head_hash": sealed["head_hash"],
+                "events": sealed["events"],
+            })
     finally:
         db.close()
 
@@ -102,6 +141,15 @@ def start_test(body: TestCreate, tasks: BackgroundTasks, db: Session = Depends(g
     db.add(run); db.commit()
     tasks.add_task(execute_run, run.id)
     return {"test_run_id": run.id, "status": "queued"}
+
+
+@router.get("/tests")
+def list_runs(limit: int = 30, db: Session = Depends(get_db)):
+    runs = db.query(TestRun).order_by(TestRun.id.desc()).limit(limit).all()
+    return [
+        {c: getattr(r, c) for c in ["id", "target_id", "mode", "status", "total", "executed", "resisted", "successful", "inconclusive", "skipped", "errors", "started_at", "finished_at"]}
+        for r in runs
+    ]
 
 
 @router.get("/tests/{run_id}")

@@ -1,8 +1,23 @@
+# Zero-API Fusion Engine — the numbers the detection engine actually uses.
+# The authoritative values live in backend/app/services/fusion.py; this file
+# documents them and is what an operator reads when tuning is discussed.
 request:
-  weights: {rules: 0.35, similarity: 0.30, obfuscation: 0.10, judge: 0.25}
-  judge_band: [30, 70]
+  engine: zero-api-deterministic
+  formula: "(0.50 * R) + (0.35 * S) + (0.15 * D)"
+  weights: {rules: 0.50, similarity: 0.35, decoding: 0.15}
+  components:
+    R: "min(100, sum of matching signature weights)  # 19 runtime signatures"
+    S: "100 if top corpus similarity >= 0.85 else the similarity itself"
+    D: "100 if normalization produced decoding evidence else 0"
   thresholds: {review: 30, block: 70}
+  block_requires: {min_confidence: 0.6, min_signals: 2}
+  benign_discussion_damping: 0.45   # cancelled outright by decoding evidence
+  judge: none                       # no external AI judge on the request path
 response:
-  weights: {leakage_patterns: 0.45, expected_behavior: 0.30, judge: 0.25}
-  thresholds: {review: 30, block: 70}
+  weights: {leakage_patterns: 0.70, expected_behavior: 0.20, judge: 0.10}
+  thresholds: {redact: 30, block: 70}
+  scanners: [api_key, jwt, email, ssn, credit_card, high_entropy_secret, canary]
+  entropy: {threshold: 4.0, min_length: 20}
 similarity_threshold: 0.85
+session_window: {max_messages: 6, ttl_seconds: 1800}
+audit: {algorithm: HMAC-SHA256, key_publication: atomic, seal_on: run_completed}

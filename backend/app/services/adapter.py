@@ -60,6 +60,13 @@ async def call_target(target: Target, message: str, session_id: str) -> str:
     """
     Dispatches prompt to configured Hugging Face target model or custom target bot endpoint.
     """
+    # Air-gapped micro-model sandbox: internal:// never leaves this host, so it
+    # is resolved before any credential is decrypted or any socket is opened.
+    from .micro_model import call_micro_model, is_internal
+
+    if is_internal(target.api_endpoint):
+        return await call_micro_model(target, message)
+
     auth_val = ""
     if target.auth_config_encrypted:
         auth_val = reveal(target.auth_config_encrypted, settings.encryption_key) or ""
