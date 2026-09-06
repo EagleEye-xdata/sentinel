@@ -408,7 +408,7 @@ html, body {
    OVERVIEW PAGE
 ═══════════════════════════════════════════ */
 .overview-hero {
-  background: linear-gradient(135deg, #111111 0%, #0d0d0d 100%);
+  background: linear-gradient(135deg, rgba(17,17,17,0.85) 0%, rgba(13,13,13,0.7) 100%);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 48px 40px;
@@ -418,6 +418,8 @@ html, body {
   min-height: 320px;
   display: flex;
   align-items: center;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .overview-hero-bg {
@@ -425,8 +427,9 @@ html, body {
   right: 40px;
   top: 50%;
   transform: translateY(-50%);
-  opacity: 0.18;
+  opacity: 0.28;
   pointer-events: none;
+  transition: opacity 0.5s ease;
 }
 
 .hero-eyebrow {
@@ -435,6 +438,9 @@ html, body {
   letter-spacing: 0.25em;
   color: var(--red);
   margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .hero-headline {
@@ -443,7 +449,16 @@ html, body {
   letter-spacing: -0.03em;
   line-height: 1.05;
   color: var(--text);
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+}
+
+.hero-headline-line {
+  display: block;
+  overflow: hidden;
+}
+
+.hero-headline-inner {
+  display: inline-block;
 }
 
 .hero-headline span { color: var(--red); }
@@ -1932,3 +1947,52 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* retest comparison */
 .retest-banner-card { background: var(--bg); border: 1px solid rgba(53,214,208,0.2); border-radius: 8px; padding: 14px 16px; margin: 12px 20px; }
+
+/* ═══════════════════════════════════════════
+   CINEMATIC MOTION & ACCESSIBILITY TOKENS
+═══════════════════════════════════════════ */
+.hero-cta {
+  box-shadow: 0 4px 20px rgba(220, 38, 38, 0.3);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, background 0.15s ease;
+}
+
+.hero-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(220, 38, 38, 0.5);
+}
+
+.stat-card, .threat-surface-card, .pipeline-card, .overview-targets-card, .scan-cta-card, .attack-card, .wizard-step-card {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover, .threat-surface-card:hover, .pipeline-card:hover, .attack-card:hover {
+  border-color: rgba(220, 38, 38, 0.35);
+  box-shadow: 0 8px 24px rgba(220, 38, 38, 0.08);
+}
+
+/* Pipeline traveling signal animation */
+@keyframes pipeline-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 rgba(220, 38, 38, 0);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(220, 38, 38, 0.6);
+  }
+}
+
+.pipeline-step.active .pipeline-step-indicator {
+  animation: pipeline-glow 2.5s infinite ease-in-out;
+}
+
+/* Reduced Motion Override */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .radar-spin, .pulseRing, .status-dot {
+    animation: none !important;
+  }
+}

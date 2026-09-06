@@ -1,6 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import { AnimationProvider, useAnimation } from "./motion/AnimationContext";
+import { CyberCanvas } from "./canvas/CyberCanvas";
+import { SmoothScroll } from "./motion/SmoothScroll";
+import { PageTransition } from "./components/PageTransition";
+import { gsap, animateCounter, ANIM_EASINGS } from "./motion/gsap";
 
 const API = (import.meta as any).env.VITE_API_URL || "http://localhost:8000";
 
@@ -133,6 +138,7 @@ const Icons = {
 
 // ─── TOP BAR ──────────────────────────────────────────────────────────────
 function TopBar({ page, alertCount }: { page: Page; alertCount: number }) {
+  const { triggerThreatPulse, triggerScanSweep } = useAnimation();
   const pageLabels: Record<Page, string> = {
     "Overview": "INTELLIGENCE BRIEFING",
     "Targets": "TARGET RECON",
@@ -163,7 +169,14 @@ function TopBar({ page, alertCount }: { page: Page; alertCount: number }) {
         <span className="bc-parent">SENTINEL</span>
         <span className="bc-sep">/</span>
         <span className="bc-current">{pageLabels[page]}</span>
-        <span className="topbar-badge demo">⬤ DEMO SIMULATION</span>
+        <span
+          className="topbar-badge demo"
+          onClick={triggerScanSweep}
+          style={{ cursor: "pointer" }}
+          title="Trigger 3D Cyber Scan"
+        >
+          ⬤ DEMO SIMULATION
+        </span>
       </div>
 
       <div className="topbar-right">
@@ -181,8 +194,21 @@ function TopBar({ page, alertCount }: { page: Page; alertCount: number }) {
             <span className="badge-dot">{alertCount > 9 ? "9+" : alertCount}</span>
           )}
         </button>
-        <button className="topbar-icon-btn">〜</button>
-        <button className="topbar-icon-btn" style={{ background: "var(--red)", border: "none", color: "#fff" }}>⚡</button>
+        <button
+          className="topbar-icon-btn"
+          onClick={triggerScanSweep}
+          title="Trigger Ambient Scan Sweep"
+        >
+          〜
+        </button>
+        <button
+          className="topbar-icon-btn"
+          style={{ background: "var(--red)", border: "none", color: "#fff" }}
+          onClick={triggerThreatPulse}
+          title="Trigger 3D Threat Vector Pulse"
+        >
+          ⚡
+        </button>
       </div>
     </header>
   );
@@ -279,6 +305,87 @@ function RadarGraphic() {
 
 // ─── OVERVIEW PAGE ────────────────────────────────────────────────────────
 function OverviewPage({ targets, attacks, alerts, onNavigate }: any) {
+  const { reducedMotion, triggerThreatPulse } = useAnimation();
+
+  const heroRef = useRef<HTMLDivElement>(null);
+  const eyebrowRef = useRef<HTMLDivElement>(null);
+  const line1Ref = useRef<HTMLSpanElement>(null);
+  const line2Ref = useRef<HTMLSpanElement>(null);
+  const subRef = useRef<HTMLParagraphElement>(null);
+  const ctaGroupRef = useRef<HTMLDivElement>(null);
+  const statsBarRef = useRef<HTMLDivElement>(null);
+
+  const scoreNumRef = useRef<HTMLSpanElement>(null);
+  const testsNumRef = useRef<HTMLSpanElement>(null);
+  const rateNumRef = useRef<HTMLSpanElement>(null);
+
+  const threatCardRef = useRef<HTMLDivElement>(null);
+  const pipelineCardRef = useRef<HTMLDivElement>(null);
+  const targetsCardRef = useRef<HTMLDivElement>(null);
+  const scanCtaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (reducedMotion) return;
+
+    const ctx = gsap.context(() => {
+      // 1. Hero Cinematic Stagger Entrance (0.0s background, 0.2s status, 0.35s line1, 0.5s line2, 0.7s sub, 0.9s cta, 1.1s metrics)
+      const tl = gsap.timeline({ defaults: { ease: ANIM_EASINGS.cinematic } });
+
+      if (eyebrowRef.current) {
+        tl.fromTo(eyebrowRef.current, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.4 }, 0.2);
+      }
+      if (line1Ref.current) {
+        tl.fromTo(line1Ref.current, { opacity: 0, y: 35 }, { opacity: 1, y: 0, duration: 0.65 }, 0.35);
+      }
+      if (line2Ref.current) {
+        tl.fromTo(line2Ref.current, { opacity: 0, y: 35 }, { opacity: 1, y: 0, duration: 0.65 }, 0.5);
+      }
+      if (subRef.current) {
+        tl.fromTo(subRef.current, { opacity: 0, y: 15 }, { opacity: 1, y: 0, duration: 0.5 }, 0.7);
+      }
+      if (ctaGroupRef.current) {
+        tl.fromTo(ctaGroupRef.current, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5 }, 0.9);
+      }
+      if (statsBarRef.current) {
+        tl.fromTo(statsBarRef.current.children, { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.55, stagger: 0.08 }, 1.1);
+      }
+
+      // 2. Animated Metrics Count-up
+      animateCounter(scoreNumRef.current, 84, { duration: 1.4, delay: 1.1 });
+      animateCounter(testsNumRef.current, attacks.length > 0 ? 1284 : 0, { duration: 1.6, delay: 1.15 });
+      animateCounter(rateNumRef.current, 99.8, { duration: 1.5, delay: 1.2, decimals: 1 });
+
+      // 3. Reusable ScrollTrigger Section Reveals
+      const revealSection = (el: HTMLElement | null) => {
+        if (!el) return;
+        gsap.fromTo(
+          el,
+          { opacity: 0, y: 32, scale: 0.985 },
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            duration: 0.75,
+            ease: ANIM_EASINGS.cinematic,
+            scrollTrigger: {
+              trigger: el,
+              start: "top 88%",
+              toggleActions: "play none none none",
+              once: true,
+            },
+          }
+        );
+      };
+
+      revealSection(threatCardRef.current);
+      revealSection(pipelineCardRef.current);
+      revealSection(targetsCardRef.current);
+      revealSection(scanCtaRef.current);
+    });
+
+    return () => ctx.revert();
+  }, [reducedMotion, attacks.length]);
+
   const pipelineSteps = [
     { name: "INGRESS", sub: "Capture", state: "active" },
     { name: "EGRESS", sub: "Top-Line", state: "active" },
@@ -292,17 +399,23 @@ function OverviewPage({ targets, attacks, alerts, onNavigate }: any) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Hero */}
-      <div className="overview-hero">
+      <div className="overview-hero" ref={heroRef}>
         <div style={{ position: "relative", zIndex: 1, maxWidth: 480 }}>
-          <div className="hero-eyebrow">⬤ AI CYBERSECURITY INTELLIGENCE SYSTEM</div>
-          <div className="hero-headline">
-            SEE THE ATTACK<br />
-            <span>BEFORE THE BREACH.</span>
+          <div className="hero-eyebrow" ref={eyebrowRef}>
+            <span>⬤</span> AI CYBERSECURITY INTELLIGENCE SYSTEM
           </div>
-          <p className="hero-sub">
+          <div className="hero-headline">
+            <span className="hero-headline-line">
+              <span className="hero-headline-inner" ref={line1Ref}>SEE THE ATTACK</span>
+            </span>
+            <span className="hero-headline-line">
+              <span className="hero-headline-inner" ref={line2Ref}><span>BEFORE THE BREACH.</span></span>
+            </span>
+          </div>
+          <p className="hero-sub" ref={subRef}>
             Sentinel analyzes attack paths, model behavior, payloads, and security signals inside one intelligent cybersecurity command center.
           </p>
-          <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 0 }} ref={ctaGroupRef}>
             <button className="hero-cta" onClick={() => onNavigate("Run Test")}>
               <Icons.zap /> ⚡ LAUNCH SECURITY SCAN →
             </button>
@@ -317,10 +430,13 @@ function OverviewPage({ targets, attacks, alerts, onNavigate }: any) {
       </div>
 
       {/* Stats */}
-      <div className="stats-bar">
+      <div className="stats-bar" ref={statsBarRef}>
         <div className="stat-card danger">
           <div className="stat-label">SECURITY SCORE</div>
-          <div className="stat-value">84<span style={{ fontSize: 18, color: "var(--text3)" }}>/100</span></div>
+          <div className="stat-value">
+            <span ref={scoreNumRef}>84</span>
+            <span style={{ fontSize: 18, color: "var(--text3)" }}>/100</span>
+          </div>
           <div className="stat-change down">↑ Estimate primary benchmark</div>
           <div className="stat-icon">□</div>
         </div>
@@ -332,20 +448,25 @@ function OverviewPage({ targets, attacks, alerts, onNavigate }: any) {
         </div>
         <div className="stat-card">
           <div className="stat-label">TESTS EXECUTED</div>
-          <div className="stat-value">{attacks.length > 0 ? "1,284" : "0"}</div>
+          <div className="stat-value">
+            <span ref={testsNumRef}>{attacks.length > 0 ? "1,284" : "0"}</span>
+          </div>
           <div className="stat-change">↑ Adversarial payloads tested</div>
           <div className="stat-icon">◇</div>
         </div>
         <div className="stat-card success">
           <div className="stat-label">DETECTION RATE</div>
-          <div className="stat-value">99.8<span style={{ fontSize: 18, color: "var(--text3)" }}>%</span></div>
+          <div className="stat-value">
+            <span ref={rateNumRef}>99.8</span>
+            <span style={{ fontSize: 18, color: "var(--text3)" }}>%</span>
+          </div>
           <div className="stat-change up">↑ In-day injection defense</div>
           <div className="stat-icon">↗</div>
         </div>
       </div>
 
       {/* Live Threat Surface */}
-      <div className="threat-surface-card">
+      <div className="threat-surface-card" ref={threatCardRef}>
         <div className="threat-surface-header">
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -370,31 +491,31 @@ function OverviewPage({ targets, attacks, alerts, onNavigate }: any) {
             <line x1="55%" y1="50%" x2="70%" y2="70%" stroke="#1e1e1e" strokeWidth="1" strokeDasharray="4,3" />
           </svg>
           <div style={{ position: "absolute", left: "12%", top: "40%" }}>
-            <div className="threat-node">
+            <div className="threat-node" onClick={triggerThreatPulse} style={{ cursor: "pointer" }}>
               <div className="threat-node-dot green" />
               <div className="threat-node-label">API GATEWAY</div>
             </div>
           </div>
           <div style={{ position: "absolute", left: "32%", top: "25%" }}>
-            <div className="threat-node">
+            <div className="threat-node" onClick={triggerThreatPulse} style={{ cursor: "pointer" }}>
               <div className="threat-node-dot" />
               <div className="threat-node-label">TGT-001</div>
             </div>
           </div>
           <div style={{ position: "absolute", left: "51%", top: "38%" }}>
-            <div className="threat-node">
+            <div className="threat-node" onClick={triggerThreatPulse} style={{ cursor: "pointer" }}>
               <div className="threat-node-dot orange" />
               <div className="threat-node-label">RAG PIPELINE</div>
             </div>
           </div>
           <div style={{ position: "absolute", left: "71%", top: "28%" }}>
-            <div className="threat-node">
+            <div className="threat-node" onClick={triggerThreatPulse} style={{ cursor: "pointer" }}>
               <div className="threat-node-dot" style={{ background: "#dc2626", boxShadow: "0 0 12px #dc2626" }} />
               <div className="threat-node-label">TGT-CANARY DEMO TARGET</div>
             </div>
           </div>
           <div style={{ position: "absolute", left: "67%", top: "60%" }}>
-            <div className="threat-node">
+            <div className="threat-node" onClick={triggerThreatPulse} style={{ cursor: "pointer" }}>
               <div className="threat-node-dot green" />
               <div className="threat-node-label">VECTOR STORE</div>
             </div>
@@ -403,7 +524,7 @@ function OverviewPage({ targets, attacks, alerts, onNavigate }: any) {
       </div>
 
       {/* Security Pipeline */}
-      <div className="pipeline-card">
+      <div className="pipeline-card" ref={pipelineCardRef}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ fontSize: 9.5, fontWeight: 700, color: "var(--text3)", letterSpacing: "0.2em", marginBottom: 4 }}>DEFENSE IN DEPTH</div>
@@ -423,7 +544,7 @@ function OverviewPage({ targets, attacks, alerts, onNavigate }: any) {
       </div>
 
       {/* Registered Targets */}
-      <div className="overview-targets-card">
+      <div className="overview-targets-card" ref={targetsCardRef}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <div>
             <div style={{ fontSize: 9.5, fontWeight: 700, color: "var(--text3)", letterSpacing: "0.15em", marginBottom: 3 }}>REGISTERED INTELLIGENCE</div>
@@ -458,7 +579,7 @@ function OverviewPage({ targets, attacks, alerts, onNavigate }: any) {
       </div>
 
       {/* Execute Scan CTA */}
-      <div className="scan-cta-card">
+      <div className="scan-cta-card" ref={scanCtaRef}>
         <div style={{ fontSize: 9.5, fontWeight: 700, color: "var(--text3)", letterSpacing: "0.2em", marginBottom: 6 }}>QUICK ACTION</div>
         <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>EXECUTE PROMPT INJECTION SCAN</div>
         <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 14 }}>
@@ -476,6 +597,8 @@ function OverviewPage({ targets, attacks, alerts, onNavigate }: any) {
 function AttackLibraryPage({ attacks, onSelectAttack }: any) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("All");
+  const { reducedMotion, triggerThreatPulse } = useAnimation();
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const attackMeta: Record<string, { id: string; owasp: string[]; count: number; mitigated: number }> = {
     "direct_injection":      { id: "ATK-001", owasp: ["OWASP-LLM01", "Injection", "System-Bypass"],  count: 342, mitigated: 88.4 },
@@ -515,6 +638,18 @@ function AttackLibraryPage({ attacks, onSelectAttack }: any) {
   // Group attacks by category for card display, or show filtered
   const displayAttacks = filtered.slice(0, 20);
 
+  useEffect(() => {
+    if (reducedMotion || !gridRef.current) return;
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        ".attack-card",
+        { opacity: 0, y: 16, scale: 0.99 },
+        { opacity: 1, y: 0, scale: 1, stagger: 0.035, duration: 0.45, ease: "power2.out" }
+      );
+    }, gridRef);
+    return () => ctx.revert();
+  }, [cat, q, displayAttacks.length, reducedMotion]);
+
   const getSev = (a: any) => a.source_severity || "MEDIUM";
   const getMeta = (a: any) => attackMeta[a.category] || { id: "ATK-000", owasp: [a.category || "Unknown"], count: 0, mitigated: 0 };
 
@@ -541,7 +676,7 @@ function AttackLibraryPage({ attacks, onSelectAttack }: any) {
       </div>
 
       {/* Attack grid */}
-      <div className="attack-grid">
+      <div className="attack-grid" ref={gridRef}>
         {displayAttacks.map((a: any, idx: number) => {
           const meta = getMeta(a);
           const sev = getSev(a);
@@ -550,7 +685,10 @@ function AttackLibraryPage({ attacks, onSelectAttack }: any) {
             <div
               key={a.id}
               className={`attack-card ${isLast ? "wide" : ""}`}
-              onClick={() => onSelectAttack && onSelectAttack(a)}
+              onClick={() => {
+                triggerThreatPulse();
+                if (onSelectAttack) onSelectAttack(a);
+              }}
             >
               <div className="attack-card-top">
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -605,6 +743,20 @@ function TargetsPage({ targets, targetPingStatus, onRefresh, onSelectAndGo }: an
   const [authHeader, setAuthHeader] = useState("");
   const [canary, setCanary] = useState("GENESIS-7731-INTERNAL");
   const [saving, setSaving] = useState(false);
+  const { reducedMotion, triggerThreatPulse } = useAnimation();
+  const tableRef = useRef<HTMLTableElement>(null);
+
+  useEffect(() => {
+    if (reducedMotion || !tableRef.current) return;
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        "tbody tr",
+        { opacity: 0, x: -16 },
+        { opacity: 1, x: 0, stagger: 0.05, duration: 0.45, ease: "power2.out" }
+      );
+    }, tableRef);
+    return () => ctx.revert();
+  }, [targets.length, reducedMotion]);
 
   const getRisk = (t: any, idx: number) => {
     const risks = ["CRITICAL", "HIGH", "LOW", "MEDIUM", "LOW"];
@@ -678,7 +830,7 @@ function TargetsPage({ targets, targetPingStatus, onRefresh, onSelectAndGo }: an
       </div>
 
       <div className="targets-table-wrap">
-        <table className="targets-table">
+        <table className="targets-table" ref={tableRef}>
           <thead>
             <tr>
               <th>ID</th>
@@ -699,7 +851,7 @@ function TargetsPage({ targets, targetPingStatus, onRefresh, onSelectAndGo }: an
               const env = getEnv(t, i);
               const reachable = targetPingStatus[t.id];
               return (
-                <tr key={t.id} onClick={() => onSelectAndGo(t.id)}>
+                <tr key={t.id} onClick={() => { triggerThreatPulse(); onSelectAndGo(t.id); }}>
                   <td><span className="tgt-id">TGT-{String(t.id).padStart(3, "0")}</span></td>
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -794,9 +946,33 @@ function RunTestPage({ targets, attacks, onStartRun, run }: any) {
   const [selectedVectors, setSelectedVectors] = useState<Set<string>>(new Set(["direct_injection", "jailbreak"]));
   const [intensity, setIntensity] = useState(75);
 
+  const { reducedMotion, triggerThreatPulse, sceneParamsRef } = useAnimation();
+  const wizardRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     setTargetId((cur: number) => targets.some((t: any) => t.id === cur) ? cur : defaultId);
   }, [defaultId]);
+
+  useEffect(() => {
+    if (reducedMotion || !wizardRef.current) return;
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        ".wizard-step-card",
+        { opacity: 0, y: 22, scale: 0.99 },
+        { opacity: 1, y: 0, scale: 1, stagger: 0.1, duration: 0.5, ease: "power2.out" }
+      );
+    }, wizardRef);
+    return () => ctx.revert();
+  }, [reducedMotion]);
+
+  // Dynamically calibrate 3D scene speed and red alert tone based on fuzzer intensity
+  useEffect(() => {
+    if (sceneParamsRef.current) {
+      sceneParamsRef.current.scanSpeed = 0.8 + (intensity / 100) * 1.4;
+      sceneParamsRef.current.networkActivity = 0.6 + (intensity / 100) * 1.1;
+      sceneParamsRef.current.redLightIntensity = 0.7 + (intensity / 100) * 0.8;
+    }
+  }, [intensity, sceneParamsRef]);
 
   const vectorOptions = [
     { key: "direct_injection",   label: "Direct Prompt Injection" },
@@ -808,6 +984,7 @@ function RunTestPage({ targets, attacks, onStartRun, run }: any) {
   ];
 
   const toggleVector = (key: string) => {
+    triggerThreatPulse();
     setSelectedVectors(prev => {
       const n = new Set(prev);
       n.has(key) ? n.delete(key) : n.add(key);
@@ -820,7 +997,7 @@ function RunTestPage({ targets, attacks, onStartRun, run }: any) {
   const isRunning = run && (run.status === "running" || run.status === "queued");
 
   return (
-    <div className="run-test-layout">
+    <div className="run-test-layout" ref={wizardRef}>
       <div>
         <div className="page-eyebrow">EXECUTION RUNNER</div>
         <h1 className="page-title">CONFIGURE SECURITY SCAN</h1>
@@ -1702,63 +1879,76 @@ function App() {
           </div>
         )}
 
-        {page === "Overview" && (
-          <OverviewPage targets={targets} attacks={attacks} alerts={alerts} onNavigate={setPage} />
-        )}
+        <PageTransition pageKey={page}>
+          {page === "Overview" && (
+            <OverviewPage targets={targets} attacks={attacks} alerts={alerts} onNavigate={setPage} />
+          )}
 
-        {page === "Targets" && (
-          <TargetsPage targets={targets} targetPingStatus={targetPingStatus} onRefresh={refresh}
-            onSelectAndGo={(id: number) => { setSelectedTargetId(id); setPage("Live Console"); }} />
-        )}
+          {page === "Targets" && (
+            <TargetsPage targets={targets} targetPingStatus={targetPingStatus} onRefresh={refresh}
+              onSelectAndGo={(id: number) => { setSelectedTargetId(id); setPage("Live Console"); }} />
+          )}
 
-        {page === "Attack Library" && (
-          <AttackLibraryPage attacks={attacks} onSelectAttack={(atk: any) => { handleApplyAttack(atk); setPage("Live Console"); }} />
-        )}
+          {page === "Attack Library" && (
+            <AttackLibraryPage attacks={attacks} onSelectAttack={(atk: any) => { handleApplyAttack(atk); setPage("Live Console"); }} />
+          )}
 
-        {page === "Payload Lab" && (
-          <PlaceholderPage title="PAYLOAD LABORATORY" eyebrow="ADVERSARIAL PAYLOAD ENGINEERING" subtitle="Craft, mutate, and export advanced adversarial payloads for red-team operations." />
-        )}
+          {page === "Payload Lab" && (
+            <PlaceholderPage title="PAYLOAD LABORATORY" eyebrow="ADVERSARIAL PAYLOAD ENGINEERING" subtitle="Craft, mutate, and export advanced adversarial payloads for red-team operations." />
+          )}
 
-        {page === "Run Test" && (
-          <RunTestPage targets={targets} attacks={attacks}
-            onStartRun={async (cfg: any) => {
-              const res = await api("/tests", { method: "POST", body: JSON.stringify(cfg) });
-              setRun({ id: res.test_run_id, status: "queued", executed: 0, total: 0 });
-            }}
-            run={run}
-          />
-        )}
+          {page === "Run Test" && (
+            <RunTestPage targets={targets} attacks={attacks}
+              onStartRun={async (cfg: any) => {
+                const res = await api("/tests", { method: "POST", body: JSON.stringify(cfg) });
+                setRun({ id: res.test_run_id, status: "queued", executed: 0, total: 0 });
+              }}
+              run={run}
+            />
+          )}
 
-        {page === "Live Console" && <LiveConsolePage {...sharedConsoleProps} />}
+          {page === "Live Console" && <LiveConsolePage {...sharedConsoleProps} />}
 
-        {page === "Run Monitor" && (
-          <RunMonitorPage targets={targets} attacks={attacks}
-            onStartRun={async (cfg: any) => {
-              const res = await api("/tests", { method: "POST", body: JSON.stringify(cfg) });
-              setRun({ id: res.test_run_id, status: "queued", executed: 0, total: 0 });
-            }}
-            run={run}
-          />
-        )}
+          {page === "Run Monitor" && (
+            <RunMonitorPage targets={targets} attacks={attacks}
+              onStartRun={async (cfg: any) => {
+                const res = await api("/tests", { method: "POST", body: JSON.stringify(cfg) });
+                setRun({ id: res.test_run_id, status: "queued", executed: 0, total: 0 });
+              }}
+              run={run}
+            />
+          )}
 
-        {page === "Alerts" && <AlertsPage alerts={alerts} />}
+          {page === "Alerts" && <AlertsPage alerts={alerts} />}
 
-        {page === "Reports" && (
-          <ReportsPage report={report} run={run} onSelectReport={setReport}
-            onNavigateTab={(t: Page) => setPage(t)} />
-        )}
+          {page === "Reports" && (
+            <ReportsPage report={report} run={run} onSelectReport={setReport}
+              onNavigateTab={(t: Page) => setPage(t)} />
+          )}
 
-        {page === "Inspect" && (
-          <PlaceholderPage title="SESSION INSPECTOR" eyebrow="FORENSIC ANALYSIS" subtitle="Deep inspection of individual sessions, request chains, and response signatures." />
-        )}
+          {page === "Inspect" && (
+            <PlaceholderPage title="SESSION INSPECTOR" eyebrow="FORENSIC ANALYSIS" subtitle="Deep inspection of individual sessions, request chains, and response signatures." />
+          )}
 
-        {page === "Settings" && (
-          <PlaceholderPage title="SETTINGS" eyebrow="SYSTEM CONFIGURATION" subtitle="Configure API keys, notification thresholds, audit parameters, and system preferences." />
-        )}
+          {page === "Settings" && (
+            <PlaceholderPage title="SETTINGS" eyebrow="SYSTEM CONFIGURATION" subtitle="Configure API keys, notification thresholds, audit parameters, and system preferences." />
+          )}
+        </PageTransition>
       </div>
     </div>
   );
 }
 
+function RootApp() {
+  return (
+    <AnimationProvider>
+      <CyberCanvas />
+      <SmoothScroll>
+        <App />
+      </SmoothScroll>
+    </AnimationProvider>
+  );
+}
+
 const root = createRoot(document.getElementById("root")!);
-root.render(<App />);
+root.render(<RootApp />);
