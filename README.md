@@ -141,7 +141,7 @@ GET  /audit/keys                      open segment + published segments
 
 ### Prerequisites:
 - Python 3.10+
-- Node.js 18+
+- Node.js 22.12+ (or Node.js 20.19+)
 
 ### Step 1: Clone and prepare the project
 ```powershell
@@ -192,13 +192,32 @@ python target/huggingface_target.py
 
 ---
 
-## 🖥️ 3-Panel Unified Testing Workspace
+## Frontend workspace
 
-| Workspace Area | Description |
+The React and TypeScript dashboard uses a dark red security theme, persistent sidebar navigation, and a Three.js intelligence core. GSAP handles transitions and section reveals; Lenis provides smooth scrolling. The animation layer responds to the operating system's reduced-motion preference and adjusts rendering quality.
+
+| Page | Current behavior |
 |---|---|
-| **1. Injection Module (Left)** | Choose from **159 Curated Attack Patterns** across 17 categories (*Roleplay Hijack, Direct System Prompt Leak, Delimiter Escapes, Developer Mode Overrides*) with **13 Adversarial Mutations** (*Base64, Hex, Leetspeak, Unicode Homoglyphs, Zero-Width Insertion*). |
-| **2. Interactive Chatbox (Right)** | Real-time chat stream with the target AI model. Displays gateway firewall intercept status, latency, and automatic `[REDACTED]` masking of sensitive Canary Secrets (`GENESIS-7731-INTERNAL`). |
-| **3. Threat Analyzer (Bottom)** | Instant vulnerability verdict (**VULNERABLE**, **RESISTED**, **SAFE**), quantitative 0–100 risk score breakdown, security findings, and **Retest Delta Comparison** showing security improvements after remediation. |
+| Overview | Dashboard with target, corpus, and alert summaries and a visual security pipeline. |
+| Targets | Register or remove targets, check reachability, and open a target in Live Console. |
+| Attack Library | Browse attacks and load a selected payload into Live Console. |
+| Run Test / Run Monitor | Configure batch runs and follow backend execution progress. |
+| Live Console | Submit prompts through the inspection pipeline, generate mutations, review verdicts, and compare retests. |
+| Reports | Select recorded runs and review their assessment reports. |
+| Alerts | Browse backend security alerts. |
+| Payload Lab / Inspect / Settings | Placeholder pages; dedicated workflows are not yet implemented. Payload mutation and inspection are available through Live Console. |
+
+### Backend connection
+
+The frontend calls the FastAPI backend at `http://localhost:8000` by default. To point it at a different backend, set `VITE_API_URL` before starting Vite:
+
+```powershell
+# From the frontend directory:
+$env:VITE_API_URL = "http://127.0.0.1:8000"
+npm run dev
+```
+
+For a production build, set the same variable before `npm run build`; Vite embeds the URL in the generated bundle. Allow the frontend's origin through the backend's `SENTINEL_CORS_ORIGINS` configuration when serving it from another host or port. Keep provider credentials in the backend or submit them through the target registration form; do not put secrets in `VITE_*` variables.
 
 ---
 
@@ -232,10 +251,13 @@ sentinel/
 │   └── requirements.txt
 │
 ├── frontend/
+│   ├── package.json                 # Vite development, build, and test commands
 │   └── src/
-│       ├── main.tsx                 # 2-Tier Workspace UI (Injection + Chatbox + Analyzer)
-│       ├── style.css                # Base styling & modern design tokens
-│       └── upgrade.css              # Cyber-defense dark theme, glassmorphism & risk gauges
+│       ├── main.tsx                 # Dashboard pages and backend API integration
+│       ├── style.css                # Dark red dashboard theme and layout
+│       ├── canvas/                  # Three.js core and atmospheric network
+│       ├── components/              # Page transitions
+│       └── motion/                  # Animation context, GSAP, and smooth scrolling
 │
 ├── target/
 │   └── huggingface_target.py        # Controlled Hugging Face target bot (WEAK vs HARDENED)
@@ -264,15 +286,17 @@ sentinel/
 
 ## 🧪 Verification & Automated Testing
 
-All backend and frontend components are verified with automated test suites:
+Run the available checks from the repository root:
 
 ```powershell
-# Run backend pytest suite:
+# Run backend pytest suite with deterministic settings:
+$env:JUDGE_PROVIDER = "none"
+$env:MOCK_LLM = "1"
 python -m pytest -q
 
-# Build frontend production bundle:
-cd frontend
-npm run build
+# Run frontend tests and build the production bundle:
+npm test --prefix frontend
+npm run build --prefix frontend
 ```
 
 ---
